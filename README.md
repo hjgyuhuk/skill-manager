@@ -15,7 +15,7 @@ Scans `skills/` and `skills_disabled/` under each of these:
 build from source:
 
 ```bash
-git clone https://github.com/<your-username>/skillman.git
+git clone https://github.com/hjgyuhuk/skillman.git
 cd skillman
 go build -o skillman .
 mv skillman /usr/local/bin/

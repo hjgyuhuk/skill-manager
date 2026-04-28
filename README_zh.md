@@ -14,7 +14,7 @@
 从源码编译：
 
 ```bash
-git clone https://github.com/<your-username>/skillman.git
+git clone https://github.com/hjgyuhuk/skillman.git
 cd skillman
 go build -o skillman .
 mv skillman /usr/local/bin/
