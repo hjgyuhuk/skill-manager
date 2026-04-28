@@ -283,3 +283,107 @@ func TestReadMeta_NotExists(t *testing.T) {
 		t.Errorf("expected nil, got %+v", meta)
 	}
 }
+
+func TestReplaceDir_WithExistingDst(t *testing.T) {
+	parent := t.TempDir()
+	src := filepath.Join(parent, "src")
+	dst := filepath.Join(parent, "dst")
+
+	// Create dst with content
+	os.MkdirAll(dst, 0755)
+	os.WriteFile(filepath.Join(dst, "old.txt"), []byte("old"), 0644)
+
+	// Create src with different content
+	os.MkdirAll(src, 0755)
+	os.WriteFile(filepath.Join(src, "new.txt"), []byte("new"), 0644)
+
+	if err := ReplaceDir(src, dst); err != nil {
+		t.Fatalf("ReplaceDir() error: %v", err)
+	}
+
+	// Verify new content is in place
+	data, err := os.ReadFile(filepath.Join(dst, "new.txt"))
+	if err != nil {
+		t.Fatalf("new.txt not found: %v", err)
+	}
+	if string(data) != "new" {
+		t.Errorf("expected %q, got %q", "new", string(data))
+	}
+
+	// Verify old content is gone
+	if _, err := os.Stat(filepath.Join(dst, "old.txt")); !os.IsNotExist(err) {
+		t.Error("old.txt should not exist")
+	}
+
+	// Verify src was consumed
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Error("src should have been renamed away")
+	}
+
+	// Verify no backup leftovers
+	entries, _ := os.ReadDir(parent)
+	for _, e := range entries {
+		if e.Name() == "dst" {
+			continue
+		}
+		t.Errorf("unexpected leftover entry: %s", e.Name())
+	}
+}
+
+func TestReplaceDir_NoExistingDst(t *testing.T) {
+	parent := t.TempDir()
+	src := filepath.Join(parent, "src")
+	dst := filepath.Join(parent, "dst")
+
+	os.MkdirAll(src, 0755)
+	os.WriteFile(filepath.Join(src, "file.txt"), []byte("hello"), 0644)
+
+	if err := ReplaceDir(src, dst); err != nil {
+		t.Fatalf("ReplaceDir() error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dst, "file.txt"))
+	if err != nil {
+		t.Fatalf("file.txt not found: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Errorf("expected %q, got %q", "hello", string(data))
+	}
+}
+
+func TestReplaceDir_SkillNameCollision(t *testing.T) {
+	// Ensure a skill named "foo.backup" doesn't interfere with replacing "foo"
+	parent := t.TempDir()
+	src := filepath.Join(parent, "src")
+	dst := filepath.Join(parent, "foo")
+	collision := filepath.Join(parent, "foo.backup")
+
+	os.MkdirAll(dst, 0755)
+	os.WriteFile(filepath.Join(dst, "old.txt"), []byte("old"), 0644)
+
+	// "foo.backup" is a real skill directory — must not be touched
+	os.MkdirAll(collision, 0755)
+	os.WriteFile(filepath.Join(collision, "keep.txt"), []byte("keep"), 0644)
+
+	os.MkdirAll(src, 0755)
+	os.WriteFile(filepath.Join(src, "new.txt"), []byte("new"), 0644)
+
+	if err := ReplaceDir(src, dst); err != nil {
+		t.Fatalf("ReplaceDir() error: %v", err)
+	}
+
+	// foo.backup must still exist and be intact
+	data, err := os.ReadFile(filepath.Join(collision, "keep.txt"))
+	if err != nil {
+		t.Fatalf("foo.backup/keep.txt was lost: %v", err)
+	}
+	if string(data) != "keep" {
+		t.Errorf("expected %q, got %q", "keep", string(data))
+	}
+
+	// New content must be in dst
+	data, _ = os.ReadFile(filepath.Join(dst, "new.txt"))
+	if string(data) != "new" {
+		t.Errorf("expected %q, got %q", "new", string(data))
+	}
+}

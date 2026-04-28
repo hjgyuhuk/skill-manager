@@ -56,10 +56,12 @@ func ReadMeta(skillDir string) (*SkillMeta, error) {
 // GetRemoteSHA returns the latest commit SHA on the remote ref
 // without downloading any objects. Returns "" if unable to determine.
 func GetRemoteSHA(cloneURL, ref string) (string, error) {
-	args := []string{"ls-remote", "--refs"}
+	args := []string{"ls-remote"}
 	if ref != "" {
-		args = append(args, cloneURL, "refs/heads/"+ref, "refs/tags/"+ref)
+		// --refs is safe for explicit branches/tags
+		args = append(args, "--refs", cloneURL, "refs/heads/"+ref, "refs/tags/"+ref)
 	} else {
+		// HEAD is a pseudo-ref; --refs would exclude it
 		args = append(args, cloneURL, "HEAD")
 	}
 
@@ -236,7 +238,7 @@ func DiscoverSkills(repoDir string) []DiscoveredSkill {
 // InstallSkill copies the skill directory at srcPath into the target agent's
 // skills directory (~/{siteName}/skills/{skillName}/).
 // If meta is non-nil, it is written as .skillman.json inside the skill directory.
-// If the destination already exists, it is removed first (caller should confirm).
+// Uses a temp dir + atomic rename so a failed copy never destroys the existing install.
 func (m *Manager) InstallSkill(skillName, srcPath, siteName string, meta *SkillMeta) error {
 	// Find the target site
 	var target *Site
@@ -257,26 +259,36 @@ func (m *Manager) InstallSkill(skillName, srcPath, siteName string, meta *SkillM
 
 	dst := filepath.Join(target.SkillsDir, skillName)
 
-	// Remove existing if present
-	if _, err := os.Stat(dst); err == nil {
-		if err := os.RemoveAll(dst); err != nil {
-			return fmt.Errorf("remove existing skill %q: %w", skillName, err)
-		}
+	// Copy to a temp dir in the same parent (so rename is atomic)
+	tmpDst, err := os.MkdirTemp(target.SkillsDir, ".skillman-tmp-")
+	if err != nil {
+		return fmt.Errorf("create temp dir: %w", err)
 	}
+	success := false
+	defer func() {
+		if !success {
+			os.RemoveAll(tmpDst)
+		}
+	}()
 
-	// Copy the entire directory
-	if err := CopyDir(srcPath, dst); err != nil {
+	if err := CopyDir(srcPath, tmpDst); err != nil {
 		return fmt.Errorf("copy skill %q: %w", skillName, err)
 	}
 
 	// Write metadata
 	if meta != nil {
 		meta.InstalledAt = time.Now().UTC().Format(time.RFC3339)
-		if err := WriteMeta(dst, *meta); err != nil {
+		if err := WriteMeta(tmpDst, *meta); err != nil {
 			return fmt.Errorf("write meta for %q: %w", skillName, err)
 		}
 	}
 
+	// Atomic replace: move old to backup, move new in, clean up backup
+	if err := ReplaceDir(tmpDst, dst); err != nil {
+		return fmt.Errorf("install %q: %w", skillName, err)
+	}
+
+	success = true
 	return nil
 }
 
@@ -322,4 +334,51 @@ func CopyFile(src, dst string) error {
 
 	_, err = io.Copy(out, in)
 	return err
+}
+
+// ReplaceDir atomically replaces dst with src using a backup strategy:
+//  1. If dst exists, rename it to a unique temporary sibling
+//  2. Rename src to dst
+//  3. On success, remove backup; on failure, restore backup
+//
+// This ensures dst is never left in a missing/broken state.
+func ReplaceDir(src, dst string) error {
+	dstExists := false
+	var backup string
+
+	if _, err := os.Stat(dst); err == nil {
+		dstExists = true
+		parent := filepath.Dir(dst)
+		// Create a unique backup path (remove the empty dir, use the name for rename)
+		tmpBackup, err := os.MkdirTemp(parent, ".skillman-backup-")
+		if err != nil {
+			return fmt.Errorf("create backup path: %w", err)
+		}
+		if err := os.Remove(tmpBackup); err != nil {
+			return fmt.Errorf("prepare backup path: %w", err)
+		}
+		backup = tmpBackup
+
+		if err := os.Rename(dst, backup); err != nil {
+			return fmt.Errorf("backup old dir: %w", err)
+		}
+	}
+
+	// Move new into place
+	if err := os.Rename(src, dst); err != nil {
+		if dstExists {
+			if restoreErr := os.Rename(backup, dst); restoreErr != nil {
+				return fmt.Errorf("rename new dir: %w (also failed to restore backup: %v)", err, restoreErr)
+			}
+		}
+		return fmt.Errorf("rename new dir: %w", err)
+	}
+
+	// Success — clean up backup
+	if dstExists {
+		if err := os.RemoveAll(backup); err != nil {
+			return fmt.Errorf("replace succeeded but failed to clean up backup %s: %w", backup, err)
+		}
+	}
+	return nil
 }

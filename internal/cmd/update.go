@@ -12,6 +12,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type sourceKey struct {
+	cloneURL string
+	ref      string
+}
+
+type clonedSource struct {
+	tmpDir    string
+	skills    []manager.DiscoveredSkill
+	commitSHA string
+}
+
+type updateItem struct {
+	skill     manager.InstalledSkill
+	remoteSHA string
+	tmpDir    string
+	skills    []manager.DiscoveredSkill
+}
+
 func newUpdateCmd(m *manager.Manager) *cobra.Command {
 	var (
 		yes   bool
@@ -52,10 +70,6 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 			}
 
 			// Group by source to avoid duplicate ls-remote calls
-			type sourceKey struct {
-				cloneURL string
-				ref      string
-			}
 			sources := make(map[sourceKey]string) // key → remote SHA
 			for _, s := range installed {
 				k := sourceKey{s.Meta.CloneURL, s.Meta.Ref}
@@ -77,12 +91,6 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 			}
 
 			// Determine which skills need updates
-			type updateItem struct {
-				skill      manager.InstalledSkill
-				remoteSHA  string
-				tmpDir     string
-				skills     []manager.DiscoveredSkill
-			}
 			var toUpdate []updateItem
 			var upToDate []string
 
@@ -132,11 +140,6 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 			}
 
 			// Clone and discover skills for each unique source
-			type clonedSource struct {
-				tmpDir    string
-				skills    []manager.DiscoveredSkill
-				commitSHA string
-			}
 			cloned := make(map[sourceKey]*clonedSource)
 
 			for i := range toUpdate {
@@ -171,44 +174,10 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 			// Perform updates
 			updated := 0
 			for _, item := range toUpdate {
-				// Find the matching skill in the cloned repo
-				var found *manager.DiscoveredSkill
-				for _, s := range item.skills {
-					if s.Name == item.skill.Meta.SkillName {
-						found = &s
-						break
-					}
-				}
-				if found == nil {
-					fmt.Printf("  %s: skill %q not found in source (skipped)\n", item.skill.Name, item.skill.Meta.SkillName)
+				if err := updateOneSkill(item, cloned); err != nil {
+					fmt.Printf("  %s: %v\n", item.skill.Name, err)
 					continue
 				}
-
-				// Remove old, copy new
-				if err := os.RemoveAll(item.skill.Dir); err != nil {
-					fmt.Printf("  %s: remove failed: %v\n", item.skill.Name, err)
-					continue
-				}
-
-				// copyDir needs the destination parent to exist
-				if err := os.MkdirAll(filepath.Dir(item.skill.Dir), 0755); err != nil {
-					fmt.Printf("  %s: mkdir failed: %v\n", item.skill.Name, err)
-					continue
-				}
-
-				if err := manager.CopyDir(found.Path, item.skill.Dir); err != nil {
-					fmt.Printf("  %s: copy failed: %v\n", item.skill.Name, err)
-					continue
-				}
-
-				// Re-write metadata with updated SHA
-				meta := item.skill.Meta
-				meta.CommitSHA = cloned[sourceKey{item.skill.Meta.CloneURL, item.skill.Meta.Ref}].commitSHA
-				if err := manager.WriteMeta(item.skill.Dir, meta); err != nil {
-					fmt.Printf("  %s: write meta failed: %v\n", item.skill.Name, err)
-					continue
-				}
-
 				fmt.Printf("  %s: updated\n", item.skill.Name)
 				updated++
 			}
@@ -222,4 +191,51 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 	cmd.Flags().StringVarP(&agent, "agent", "a", "", "Filter by agent directory name")
 
 	return cmd
+}
+
+// updateOneSkill handles the update of a single skill. The defer inside ensures
+// any temp directory is cleaned up as soon as this function returns.
+func updateOneSkill(item updateItem, cloned map[sourceKey]*clonedSource) error {
+	// Find the matching skill in the cloned repo
+	var found *manager.DiscoveredSkill
+	for _, s := range item.skills {
+		if s.Name == item.skill.Meta.SkillName {
+			found = &s
+			break
+		}
+	}
+	if found == nil {
+		return fmt.Errorf("skill %q not found in source (skipped)", item.skill.Meta.SkillName)
+	}
+
+	// Copy to temp dir in same parent (for atomic rename)
+	parentDir := filepath.Dir(item.skill.Dir)
+	tmpDst, err := os.MkdirTemp(parentDir, ".skillman-tmp-")
+	if err != nil {
+		return fmt.Errorf("create temp dir: %w", err)
+	}
+	defer func() {
+		// Clean up temp dir if it still exists (ReplaceDir renames it away on success)
+		if _, err := os.Stat(tmpDst); err == nil {
+			os.RemoveAll(tmpDst)
+		}
+	}()
+
+	if err := manager.CopyDir(found.Path, tmpDst); err != nil {
+		return fmt.Errorf("copy failed: %w", err)
+	}
+
+	// Write metadata with updated SHA
+	meta := item.skill.Meta
+	meta.CommitSHA = cloned[sourceKey{item.skill.Meta.CloneURL, item.skill.Meta.Ref}].commitSHA
+	if err := manager.WriteMeta(tmpDst, meta); err != nil {
+		return fmt.Errorf("write meta failed: %w", err)
+	}
+
+	// Atomic replace: backup old, move new in
+	if err := manager.ReplaceDir(tmpDst, item.skill.Dir); err != nil {
+		return fmt.Errorf("replace failed: %w", err)
+	}
+
+	return nil
 }
