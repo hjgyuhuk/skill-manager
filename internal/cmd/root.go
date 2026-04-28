@@ -21,6 +21,8 @@ func NewRootCmd(m *manager.Manager) *cobra.Command {
 
 	root.AddCommand(
 		newListCmd(m),
+		newInstallCmd(m),
+		newUpdateCmd(m),
 		newDisableCmd(m),
 		newEnableCmd(m),
 		newUninstallCmd(m),

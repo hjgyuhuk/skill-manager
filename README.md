@@ -23,6 +23,68 @@ mv skillman /usr/local/bin/
 
 ## Usage
 
+### Install skills
+
+Install skills from a GitHub repository to `~/.agents/skills/`.
+
+```bash
+# Install from owner/repo shorthand
+skillman install vercel-labs/skills
+
+# Install from full URL
+skillman install https://github.com/org/repo
+
+# Install with a specific branch/tag
+skillman install vercel-labs/skills@canary
+
+# Install a specific skill
+skillman install vercel-labs/skills -s react
+
+# Install to a different agent directory
+skillman install vercel-labs/skills -a .claude
+
+# Skip confirmation (auto-overwrite existing)
+skillman install vercel-labs/skills -y
+```
+
+When multiple skills are found in a repo, an interactive selector is shown:
+
+```
+  [x] react
+  [ ] vue
+  [ ] svelte
+  [x] angular
+  ↑↓ move  space toggle  a select all  enter confirm
+```
+
+### Update skills
+
+Update skills that were installed via `skillman install`. Each installed skill stores its git source in `.skillman.json` for tracking.
+
+```bash
+# Check and update all installed skills
+skillman update
+
+# Update a specific skill
+skillman update react
+
+# Skip confirmation
+skillman update -y
+```
+
+Example output:
+
+```
+Checking vercel-labs/skills... abc12345
+  react: update available (abc12345 → def67890)
+  vue: up to date
+Update 1 skill(s):
+  react (abc12345 → def67890)
+Proceed? [y/N]
+```
+
+The update check uses `git ls-remote` (lightweight, no download) to compare commit SHAs before cloning.
+
 ### List skills
 
 ```bash
@@ -93,6 +155,8 @@ Commands support glob patterns (`*`, `?`, `[...]`) via `filepath.Match`:
 
 | Command | Single exact name | Glob pattern / Multiple args |
 |---------|-------------------|------------------------------|
+| `install` | No confirmation | N/A (interactive selector) |
+| `update` | No confirmation | Requires `[y/N]` confirmation |
 | `disable` | No confirmation | Requires `[y/N]` confirmation |
 | `enable` | No confirmation | Requires `[y/N]` confirmation |
 | `uninstall` | Requires confirmation | Requires `[y/N]` confirmation |

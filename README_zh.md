@@ -22,6 +22,68 @@ mv skillman /usr/local/bin/
 
 ## 使用
 
+### 安装 skills
+
+从 GitHub 仓库安装 skills 到 `~/.agents/skills/`。
+
+```bash
+# 用 owner/repo 简写安装
+skillman install vercel-labs/skills
+
+# 用完整 URL 安装
+skillman install https://github.com/org/repo
+
+# 指定分支/tag
+skillman install vercel-labs/skills@canary
+
+# 安装指定 skill
+skillman install vercel-labs/skills -s react
+
+# 安装到其他 agent 目录
+skillman install vercel-labs/skills -a .claude
+
+# 跳过确认（自动覆盖已有）
+skillman install vercel-labs/skills -y
+```
+
+仓库中有多个 skill 时，会显示交互式选择器：
+
+```
+  [x] react
+  [ ] vue
+  [ ] svelte
+  [x] angular
+  ↑↓ move  space toggle  a select all  enter confirm
+```
+
+### 更新 skills
+
+更新通过 `skillman install` 安装的 skills。每个已安装的 skill 会在目录中保存 `.skillman.json` 记录 git 来源。
+
+```bash
+# 检查并更新所有已安装的 skills
+skillman update
+
+# 更新指定 skill
+skillman update react
+
+# 跳过确认
+skillman update -y
+```
+
+输出示例：
+
+```
+Checking vercel-labs/skills... abc12345
+  react: update available (abc12345 → def67890)
+  vue: up to date
+Update 1 skill(s):
+  react (abc12345 → def67890)
+Proceed? [y/N]
+```
+
+更新检查使用 `git ls-remote`（轻量级，不下载文件）对比 commit SHA，有变化才执行 clone。
+
 ### 列出 skills
 
 ```bash
@@ -92,6 +154,8 @@ skillman uninstall "threejs*"
 
 | 命令 | 单个精确名称 | 通配符 / 多个参数 |
 |------|-------------|-------------------|
+| `install` | 无需确认 | N/A（交互式选择器） |
+| `update` | 无需确认 | 需要 `[y/N]` 确认 |
 | `disable` | 无需确认 | 需要 `[y/N]` 确认 |
 | `enable` | 无需确认 | 需要 `[y/N]` 确认 |
 | `uninstall` | 需要确认 | 需要 `[y/N]` 确认 |
