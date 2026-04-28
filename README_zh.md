@@ -11,12 +11,7 @@
 `~/.aider-desk` · `~/.agents` · `~/.augment` · `~/.bob` · `~/.claude` · `~/.codex` · `~/.codeartsdoer` · `~/.codebuddy` · `~/.codemaker` · `~/.codestudio` · `~/.commandcode` · `~/.continue` · `~/.cortex` · `~/.crush` · `~/.devin` · `~/.factory` · `~/.forge` · `~/.goose` · `~/.junie` · `~/.iflow` · `~/.kilocode` · `~/.kiro` · `~/.kode` · `~/.mcpjam` · `~/.vibe` · `~/.mux` · `~/.openhands` · `~/.pi` · `~/.qoder` · `~/.qwen` · `~/.rovodev` · `~/.roo` · `~/.tabnine/agent` · `~/.trae` · `~/.windsurf` · `~/.zencoder` · `~/.neovate` · `~/.pochi` · `~/.adal`
 
 ## 安装
-
-```bash
-go install skillman@latest
-```
-
-或从源码编译：
+从源码编译：
 
 ```bash
 git clone https://github.com/<your-username>/skillman.git

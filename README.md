@@ -12,11 +12,7 @@ Scans `skills/` and `skills_disabled/` under each of these:
 
 ## Install
 
-```bash
-go install skillman@latest
-```
-
-Or build from source:
+build from source:
 
 ```bash
 git clone https://github.com/<your-username>/skillman.git
