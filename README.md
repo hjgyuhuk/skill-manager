@@ -31,6 +31,9 @@ Install skills from a GitHub repository to `~/.agents/skills/`.
 # Install from owner/repo shorthand
 skillman install vercel-labs/skills
 
+# Install from a subdirectory in a GitHub repo
+skillman install mattpocock/skills/grill-me
+
 # Install from full URL
 skillman install https://github.com/org/repo
 

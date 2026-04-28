@@ -30,6 +30,9 @@ mv skillman /usr/local/bin/
 # 用 owner/repo 简写安装
 skillman install vercel-labs/skills
 
+# 从 GitHub 仓库子目录安装
+skillman install mattpocock/skills/grill-me
+
 # 用完整 URL 安装
 skillman install https://github.com/org/repo
 

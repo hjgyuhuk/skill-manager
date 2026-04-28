@@ -15,6 +15,7 @@ import (
 type sourceKey struct {
 	cloneURL string
 	ref      string
+	subdir   string
 }
 
 type clonedSource struct {
@@ -72,7 +73,7 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 			// Group by source to avoid duplicate ls-remote calls
 			sources := make(map[sourceKey]string) // key → remote SHA
 			for _, s := range installed {
-				k := sourceKey{s.Meta.CloneURL, s.Meta.Ref}
+				k := sourceKey{s.Meta.CloneURL, s.Meta.Ref, s.Meta.Subdir}
 				if _, checked := sources[k]; !checked {
 					fmt.Printf("Checking %s", s.Meta.Source)
 					if s.Meta.Ref != "" {
@@ -95,7 +96,7 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 			var upToDate []string
 
 			for _, s := range installed {
-				k := sourceKey{s.Meta.CloneURL, s.Meta.Ref}
+				k := sourceKey{s.Meta.CloneURL, s.Meta.Ref, s.Meta.Subdir}
 				remoteSHA := sources[k]
 				if remoteSHA == "" || remoteSHA == s.Meta.CommitSHA {
 					upToDate = append(upToDate, s.Name)
@@ -144,7 +145,7 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 
 			for i := range toUpdate {
 				item := &toUpdate[i]
-				k := sourceKey{item.skill.Meta.CloneURL, item.skill.Meta.Ref}
+				k := sourceKey{item.skill.Meta.CloneURL, item.skill.Meta.Ref, item.skill.Meta.Subdir}
 
 				cs, ok := cloned[k]
 				if !ok {
@@ -161,7 +162,11 @@ func newUpdateCmd(m *manager.Manager) *cobra.Command {
 					defer os.RemoveAll(tmpDir)
 
 					commitSHA, _ := manager.GetLocalSHA(tmpDir)
-					skills := manager.DiscoverSkills(tmpDir)
+					discoverRoot, err := sourceRoot(tmpDir, item.skill.Meta.Subdir)
+					if err != nil {
+						return err
+					}
+					skills := manager.DiscoverSkills(discoverRoot)
 
 					cs = &clonedSource{tmpDir: tmpDir, skills: skills, commitSHA: commitSHA}
 					cloned[k] = cs
@@ -227,7 +232,11 @@ func updateOneSkill(item updateItem, cloned map[sourceKey]*clonedSource) error {
 
 	// Write metadata with updated SHA
 	meta := item.skill.Meta
-	meta.CommitSHA = cloned[sourceKey{item.skill.Meta.CloneURL, item.skill.Meta.Ref}].commitSHA
+	cs := cloned[sourceKey{item.skill.Meta.CloneURL, item.skill.Meta.Ref, item.skill.Meta.Subdir}]
+	if cs == nil {
+		return fmt.Errorf("source clone not found")
+	}
+	meta.CommitSHA = cs.commitSHA
 	if err := manager.WriteMeta(tmpDst, meta); err != nil {
 		return fmt.Errorf("write meta failed: %w", err)
 	}

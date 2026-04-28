@@ -16,6 +16,7 @@ import (
 type source struct {
 	cloneURL string
 	ref      string
+	subdir   string
 }
 
 // parseSource converts user input into a git clone URL and optional ref.
@@ -23,7 +24,8 @@ type source struct {
 // Supported formats:
 //
 //	owner/repo              → https://github.com/owner/repo.git
-//	owner/repo@ref          → https://github.com/owner/repo.git, ref
+//	owner/repo/path         → https://github.com/owner/repo.git, path
+//	owner/repo/path@ref     → https://github.com/owner/repo.git, path, ref
 //	https://github.com/org/repo[.git][@ref]
 //	git@github.com:org/repo[.git][@ref]
 func parseSource(input string) source {
@@ -42,6 +44,14 @@ func parseSource(input string) source {
 
 	// owner/repo shorthand
 	if !strings.Contains(input, "://") && !strings.Contains(input, ":") {
+		parts := strings.Split(input, "/")
+		if len(parts) >= 2 {
+			s.cloneURL = fmt.Sprintf("https://github.com/%s/%s.git", parts[0], parts[1])
+			if len(parts) > 2 {
+				s.subdir = filepath.Join(parts[2:]...)
+			}
+			return s
+		}
 		s.cloneURL = fmt.Sprintf("https://github.com/%s.git", input)
 		return s
 	}
@@ -111,7 +121,11 @@ func newInstallCmd(m *manager.Manager) *cobra.Command {
 			commitSHA, _ := manager.GetLocalSHA(tmpDir)
 
 			// Discover skills
-			skills := manager.DiscoverSkills(tmpDir)
+			discoverRoot, err := sourceRoot(tmpDir, src.subdir)
+			if err != nil {
+				return err
+			}
+			skills := manager.DiscoverSkills(discoverRoot)
 			if len(skills) == 0 {
 				return fmt.Errorf("no skills found in %s", args[0])
 			}
@@ -185,6 +199,7 @@ func newInstallCmd(m *manager.Manager) *cobra.Command {
 					Source:    args[0],
 					CloneURL:  src.cloneURL,
 					Ref:       src.ref,
+					Subdir:    src.subdir,
 					SkillName: skill.Name,
 					CommitSHA: commitSHA,
 				}
@@ -204,4 +219,29 @@ func newInstallCmd(m *manager.Manager) *cobra.Command {
 	cmd.Flags().StringVarP(&agent, "agent", "a", ".agents", "Target agent directory name")
 
 	return cmd
+}
+
+func sourceRoot(repoDir, subdir string) (string, error) {
+	if subdir == "" {
+		return repoDir, nil
+	}
+	clean := filepath.Clean(subdir)
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid source subdir %q", subdir)
+	}
+	root := filepath.Join(repoDir, clean)
+	info, err := os.Stat(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			skillsRoot := filepath.Join(repoDir, "skills", clean)
+			if skillsInfo, skillsErr := os.Stat(skillsRoot); skillsErr == nil && skillsInfo.IsDir() {
+				return skillsRoot, nil
+			}
+		}
+		return "", fmt.Errorf("source subdir %q: %w", subdir, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("source subdir %q is not a directory", subdir)
+	}
+	return root, nil
 }

@@ -19,9 +19,10 @@ const metaFileName = ".skillman.json"
 // SkillMeta is persisted inside each installed skill directory.
 // It records the git source so that `update` can pull new versions.
 type SkillMeta struct {
-	Source      string `json:"source"`      // e.g. "vercel-labs/skills"
-	CloneURL    string `json:"cloneURL"`    // full git URL
-	Ref         string `json:"ref"`         // branch/tag (empty = default)
+	Source      string `json:"source"`   // e.g. "vercel-labs/skills"
+	CloneURL    string `json:"cloneURL"` // full git URL
+	Ref         string `json:"ref"`      // branch/tag (empty = default)
+	Subdir      string `json:"subdir,omitempty"`
 	SkillName   string `json:"skillName"`   // name within the source repo
 	CommitSHA   string `json:"commitSHA"`   // commit at install time
 	InstalledAt string `json:"installedAt"` // ISO 8601 timestamp
@@ -95,7 +96,7 @@ func GetLocalSHA(repoDir string) (string, error) {
 type InstalledSkill struct {
 	Name     string
 	SiteName string
-	Dir      string    // full path to skill directory
+	Dir      string // full path to skill directory
 	Meta     SkillMeta
 }
 

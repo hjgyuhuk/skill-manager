@@ -42,9 +42,9 @@ func TestDiscoverSkills_SKILLMD(t *testing.T) {
 func TestDiscoverSkills_SKILLMDOnly(t *testing.T) {
 	// SKILL.md outside skills/ directory
 	repo := createTestRepo(t, map[string]string{
-		"alpha/SKILL.md":  "# Alpha",
-		"beta/README.md":  "# Beta (no SKILL.md, not under skills/)",
-		"README.md":       "# Repo",
+		"alpha/SKILL.md": "# Alpha",
+		"beta/README.md": "# Beta (no SKILL.md, not under skills/)",
+		"README.md":      "# Repo",
 	})
 
 	skills := DiscoverSkills(repo)
@@ -101,9 +101,9 @@ func TestDiscoverSkills_Combined(t *testing.T) {
 
 func TestDiscoverSkills_SkipHidden(t *testing.T) {
 	repo := createTestRepo(t, map[string]string{
-		"skills/alpha/SKILL.md":    "# Alpha",
-		"skills/.hidden/SKILL.md":  "# Hidden",
-		".hidden/beta/SKILL.md":    "# Also Hidden",
+		"skills/alpha/SKILL.md":   "# Alpha",
+		"skills/.hidden/SKILL.md": "# Hidden",
+		".hidden/beta/SKILL.md":   "# Also Hidden",
 	})
 
 	skills := DiscoverSkills(repo)
@@ -250,6 +250,7 @@ func TestWriteReadMeta(t *testing.T) {
 		Source:    "vercel-labs/skills",
 		CloneURL:  "https://github.com/vercel-labs/skills.git",
 		Ref:       "main",
+		Subdir:    "react",
 		SkillName: "react",
 		CommitSHA: "deadbeef",
 	}
@@ -267,6 +268,9 @@ func TestWriteReadMeta(t *testing.T) {
 	}
 	if read.Ref != meta.Ref {
 		t.Errorf("ref: got %q, want %q", read.Ref, meta.Ref)
+	}
+	if read.Subdir != meta.Subdir {
+		t.Errorf("subdir: got %q, want %q", read.Subdir, meta.Subdir)
 	}
 	if read.CommitSHA != meta.CommitSHA {
 		t.Errorf("commitSHA: got %q, want %q", read.CommitSHA, meta.CommitSHA)
